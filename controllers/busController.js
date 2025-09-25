@@ -23,13 +23,51 @@ const getActiveBusesByRoute = async (req, res) => {
   }
 };
 
-const getAllBusRoutes = async (req, res) => {
+const getAllActiveTrips = async (req, res) => {
   try {
-    const routes = await busService.getAllBusRoutes();
-    res.json(routes);
+    const trips = await busService.getAllActiveTrips();
+    res.json(trips);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-module.exports = { getActiveBusesByRoute, searchBusRoutes, getAllBusRoutes };
+
+const getBusLiveLocation = async (req, res) => {
+  const { bus_id } = req.params;
+  try {
+    const location = await busService.getBusLiveLocation(bus_id);
+    if (location) {
+      res.json(location);
+    } else {
+      res.status(404).json({ message: 'Live location not found for this bus.' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
+// Add this function to your busController.js
+const updateBusLocation = async (req, res) => {
+  const { bus_id } = req.params;
+  const { lat, lng } = req.body;
+
+  if (!lat || !lng) {
+    return res.status(400).json({ error: 'Latitude and longitude are required.' });
+  }
+
+  try {
+    const updatedTrip = await busService.updateBusLocation(bus_id, lat, lng);
+    if (updatedTrip) {
+      res.json({ message: 'Location updated successfully', trip: updatedTrip });
+    } else {
+      res.status(404).json({ message: 'No active trip found for this bus.' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
+module.exports = { getActiveBusesByRoute, searchBusRoutes, getAllActiveTrips, getBusLiveLocation, updateBusLocation };
