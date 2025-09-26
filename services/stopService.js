@@ -2,7 +2,7 @@ const pool = require("../config/db");
 
 const getNearbyStops = async (lat, lng) => {
   const query = `
-    SELECT stop_id, stop_name, lat, lng,
+    SELECT stop_id, stop_name, lat, lng, route_no, direction,
       ( 6371 * acos(
           cos(radians($1)) * cos(radians(lat)) *
           cos(radians(lng) - radians($2)) +
@@ -20,34 +20,43 @@ const getNearbyStops = async (lat, lng) => {
 
 
 const getIncomingBuses = async (stop_id) => {
+  // This query finds ALL active buses on the same route as the user's stop.
+  // It does NOT depend on a 'next_stop_id'.
   const query = `
     SELECT
       t.trip_id,
-      b.bus_number,
+      t.bus_id,
       t.current_lat,
       t.current_lng,
-      next_stop.stop_name AS next_stop_name,
-      -- Calculate the difference in stops as an indicator of distance
-      (user_stop.sequence - next_stop.sequence) AS stops_away
+      b.bus_number,
+      s.route_no,
+      s.direction
     FROM Trips t
-    -- Join to get the bus's route info from its schedule
-    JOIN Schedules sch ON t.schedule_id = sch.schedule_id
-    -- Join to get the bus's number plate
+    JOIN Schedules s ON t.schedule_id = s.schedule_id
     JOIN Buses b ON t.bus_id = b.bus_id
-    -- Join to get details about the bus's *next* stop
-    JOIN Stops next_stop ON t.next_stop_id = next_stop.stop_id
-    -- Join to get details about the *user's* current stop
+    -- Find the route information for the user's chosen stop
     JOIN Stops user_stop ON user_stop.stop_id = $1
     WHERE
       t.status = 'in_progress'
       AND t.trip_date = CURRENT_DATE
-      -- CRITICAL: Ensure the bus is on the same route and direction as the user's stop
-      AND sch.route_no = user_stop.route_no
-      AND sch.direction = user_stop.direction
-      -- CRITICAL: Ensure the bus has not yet passed the user's stop
-      AND next_stop.sequence <= user_stop.sequence
-    ORDER BY
-      stops_away ASC; -- Show the closest buses first
+      -- Include buses whose route includes the same physical stop (by proximity),
+      -- OR as a fallback, buses currently within ~3km of the user's stop
+      AND (
+        EXISTS (
+          SELECT 1
+          FROM Stops st
+          WHERE st.route_no = s.route_no
+            AND ABS(st.lat - user_stop.lat) < 0.001
+            AND ABS(st.lng - user_stop.lng) < 0.001
+        )
+        OR (
+          6371 * acos(
+            cos(radians(user_stop.lat)) * cos(radians(t.current_lat)) *
+            cos(radians(t.current_lng) - radians(user_stop.lng)) +
+            sin(radians(user_stop.lat)) * sin(radians(t.current_lat))
+          ) < 3
+        )
+      );
   `;
 
   const result = await pool.query(query, [stop_id]);
