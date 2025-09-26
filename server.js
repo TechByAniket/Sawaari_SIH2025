@@ -9,10 +9,14 @@ const port = 3000;
 
 const busRoutes = require('./routes/busRoutes');
 const stopRoutes = require('./routes/stopRoutes');
+const scheduleRoutes = require('./routes/scheduleRoutes');
+const tripRoutes = require('./routes/tripRoutes');
 
 app.use(express.json());
 app.use('/buses', busRoutes);
 app.use('/stops', stopRoutes);
+app.use('/schedules', scheduleRoutes);
+app.use('/trips', tripRoutes);
 
 // Test database connection before starting the server
 async function testDbConnection() {
