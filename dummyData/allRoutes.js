@@ -102,3 +102,5 @@ const allRoutes = {
         { stop_name: "Deonar Depot", lat: 19.0460196708554, lng: 72.91205480907243 },
     ]
   };
+
+  module.exports = { allRoutes };

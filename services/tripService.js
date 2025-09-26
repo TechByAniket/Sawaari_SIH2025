@@ -3,58 +3,58 @@ const pool = require('../config/db');
 const startTrip = async (schedule_id, bus_id) => {
   const today = new Date().toISOString().split('T')[0];
 
-  // 1) Load schedule to get route_no and direction
-  const schedRes = await pool.query(
-    `SELECT route_no, direction FROM Schedules WHERE schedule_id = $1`,
-    [schedule_id]
-  );
-  if (schedRes.rows.length === 0) {
-    throw new Error('Schedule not found.');
-  }
-  const { route_no, direction } = schedRes.rows[0];
-
-  // 2) Resolve first stop for that route/direction (robust matching)
-  const stopRes = await pool.query(
-    `SELECT stop_id, lat, lng
-     FROM Stops
-     WHERE LOWER(TRIM(route_no)) = LOWER(TRIM($1))
-       AND LOWER(TRIM(direction)) = LOWER(TRIM($2))
-     ORDER BY sequence ASC
-     LIMIT 1`,
-    [route_no, direction]
-  );
-  if (stopRes.rows.length === 0) {
-    throw new Error(`No stops found for route '${route_no}' and direction '${direction}'.`);
-  }
-  const { stop_id, lat, lng } = stopRes.rows[0];
-
-  // 3) Insert trip with resolved next_stop and coordinates
-  const insertQuery = `
+  // This query finds the starting coordinates and inserts the new trip.
+  const query = `
+    WITH starting_stop AS (
+      SELECT st.lat, st.lng
+      FROM Schedules s
+      JOIN Stops st ON s.route_no = st.route_no AND s.direction = st.direction
+      WHERE s.schedule_id = $1 AND st.sequence = 1
+    )
     INSERT INTO Trips (
       bus_id,
       schedule_id,
       trip_date,
       status,
-      next_stop_id,
       current_lat,
       current_lng,
       last_updated_at
-    ) VALUES (
-      $1, $2, $3, 'in_progress', $4, $5, $6, NOW()
+    )
+    VALUES (
+      $2, -- bus_id
+      $1, -- schedule_id
+      $3, -- trip_date
+      'in_progress',
+      (SELECT lat FROM starting_stop),
+      (SELECT lng FROM starting_stop),
+      NOW()
     )
     RETURNING *;
   `;
 
-  const result = await pool.query(insertQuery, [
-    bus_id,
-    schedule_id,
-    today,
-    stop_id,
-    lat,
-    lng,
-  ]);
-
+  const result = await pool.query(query, [schedule_id, bus_id, today]);
+  if (result.rows.length === 0) {
+      throw new Error('Could not start trip. Ensure schedule ID is valid and has a starting stop (sequence=1).');
+  }
   return result.rows[0];
 };
 
-module.exports = { startTrip };
+const getActiveTrips = async () => {
+  const query = `
+    SELECT
+      t.trip_id,
+      t.bus_id,
+      s.route_no,
+      s.direction
+    FROM Trips t
+    JOIN Schedules s ON t.schedule_id = s.schedule_id
+    WHERE t.status = 'in_progress' AND t.trip_date = CURRENT_DATE;
+  `;
+  const result = await pool.query(query);
+  return result.rows;
+};
+
+module.exports = { 
+  startTrip,
+  getActiveTrips
+};
