@@ -5,7 +5,7 @@ const axios = require('axios');
 const { allRoutes } = require('./dummyData/allRoutes.js');
 
 // --- 2. SIMULATOR CONFIGURATION ---
-const UPDATE_INTERVAL_MS = 20000; // 10 seconds
+const UPDATE_INTERVAL_MS = 5000; // 10 seconds
 const API_BASE_URL = 'http://localhost:3000';
 
 // This object will keep track of the state of each bus we are simulating.

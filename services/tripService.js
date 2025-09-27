@@ -54,7 +54,23 @@ const getActiveTrips = async () => {
   return result.rows;
 };
 
+// Marks a trip as completed
+const completeTrip = async (trip_id) => {
+  const query = `
+    UPDATE Trips
+    SET status = 'completed', last_updated_at = NOW()
+    WHERE trip_id = $1 AND status = 'in_progress'
+    RETURNING *;
+  `;
+  const result = await pool.query(query, [trip_id]);
+  if (result.rows.length === 0) {
+    throw new Error('Trip not found or already completed.');
+  }
+  return result.rows[0];
+};
+
 module.exports = { 
   startTrip,
-  getActiveTrips
+  getActiveTrips,
+  completeTrip
 };
